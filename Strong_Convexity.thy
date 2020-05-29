@@ -30,7 +30,7 @@ proof -
     by (simp add: power_mult_distrib)
 qed
 
-lemma k_w2_2_convex: "strong_convex_on s (\<lambda> w. k * norm(w) * norm(w)) (2*k)"
+lemma sq_norm_strong_convex: "strong_convex_on s (\<lambda> w. k * norm(w) * norm(w)) (2*k)"
   for s :: "'a::euclidean_space set"
 proof -
   let ?f = "(\<lambda> w. k * norm(w) * norm(w))"
@@ -82,7 +82,46 @@ lemma minus_apply [simp, code]: "(A + B) x = A x + B x"
 
 instance ..
 
+
 end
+
+instantiation "fun" :: (ab_semigroup_add, ab_semigroup_add) ab_semigroup_add
+begin
+
+instance proof
+  fix x y z :: "'a => 'b"
+  show "x + y + z = x + (y + z)"
+    unfolding fun_plus_def 
+    by (simp add: linordered_field_class.sign_simps(1)) 
+next
+  fix x y :: "'a => 'b"
+  show "x + y = y + x"
+    unfolding fun_plus_def
+    by (simp add: linordered_field_class.sign_simps(2))
+qed
+end
+
+instantiation "fun" :: (comm_monoid_add, comm_monoid_add) comm_monoid_add
+begin
+
+definition zero_fun_def:  "0 == (\<lambda>x. 0)"
+
+instance proof
+  fix a :: "'a => 'b"
+  show "0 + a = a" 
+    unfolding zero_fun_def fun_plus_def by simp
+qed
+
+end
+
+lemma convex_fun_add:
+  assumes "convex_on s f" "convex_on s g"
+  shows "convex_on s (f + g)"
+proof - 
+  have "(f + g) = (\<lambda> x. f x + g x)" using fun_plus_def by auto
+  moreover have "convex_on s (\<lambda>x. f x + g x)" using assms convex_on_add by auto
+  ultimately show "convex_on s (f + g)" by auto
+qed
 
 lemma strong_convex_sum: "strong_convex_on s f k \<and> convex_on s g  \<longrightarrow> 
                             strong_convex_on s ( f + g) k"
@@ -218,12 +257,12 @@ lemma real_left_commute: "a * b * x = b * a * x"
   for a :: real
   by (simp add: mult.commute)
 
-
-lemma strongly_convex_min: 
+lemma strongly_convex_min:
   assumes "strong_convex_on s f k"
   assumes "x \<in> s"
-  assumes "\<forall>y. (f x \<le> f y)"
+  assumes "\<forall>y\<in>s. (f x \<le> f y)"
   assumes "w \<in> s"
+  assumes "convex s"
   shows "f w - f x \<ge> (k/2)*norm(w - x)^2"
 proof (cases "w = x")
   case True
@@ -233,7 +272,7 @@ next
   then show ?thesis
   proof(cases "k = 0")
     case True
-    then show ?thesis using assms(3) by auto
+    then show ?thesis using assms(3) assms(4) by auto
   next
     case False
     then show ?thesis 
@@ -279,8 +318,11 @@ next
       then have 1:"\<forall>u>0. u <= 1 \<longrightarrow>
      (\<lambda> t. (f (t *\<^sub>R w + (1-t) *\<^sub>R x) - f x )/t) u \<le> (\<lambda> t. f w  - f x - (k/2) * (1-t) * norm(w-x)^2) u" by smt
 
-      have "\<forall>u>0. u <= 1 \<longrightarrow>
-    (\<lambda> t. (f (t *\<^sub>R w + (1-t) *\<^sub>R x) - f x )/t) u  \<ge> 0" using assms(3) by auto
+      have "\<forall>u>0. u <= 1 \<longrightarrow> u *\<^sub>R w + (1 - u) *\<^sub>R x \<in> s " 
+         using assms(2) assms(4) assms(5) by (simp add: convex_def)
+      then have "\<forall>u>0. u <= 1 \<longrightarrow>
+    (\<lambda> t. (f (t *\<^sub>R w + (1-t) *\<^sub>R x) - f x )/t) u  \<ge> 0" using assms(3) 
+          assms(2) assms(4) by auto
       then have 11 : "\<forall>u>0. u <= 1 \<longrightarrow>
     0 \<le> (\<lambda> t. f w  - f x - (k/2) * (1-t) * norm(w-x)^2) u" using 1 by fastforce
 
@@ -322,5 +364,8 @@ next
     qed
   qed
 qed
+
+lemma strong_conv_if_eq: " f = g \<Longrightarrow> strong_convex_on s f k \<Longrightarrow> strong_convex_on s g k"
+  using  HOL.subst by auto
 
 end
