@@ -1,14 +1,14 @@
 theory RLM_stable
-  imports  "RLM_learn"
+  imports  "RLM_learn" "rlm_13_02_lemma"
 begin
 
 
 
 locale ridge_and_convex_loss = learning_basics1 + 
   fixes S :: "(nat \<Rightarrow> ('b \<times> 'c))"
-    and k :: "real" 
+  
   assumes convl : "\<forall>y \<in> D. convex_on H (\<lambda> h. l h y)"
-    and k_pos : "k>0"
+    and integrable_D:"\<forall> S \<in> (Samples n D). integrable D (\<lambda> z. l (ridge_mine S k) z)" 
     and S_in_D: "S \<in> Samples n D"
 begin
 
@@ -207,7 +207,8 @@ locale lipschitz_ridge_and_convex_loss =
 begin
 
 lemma lipschitz_loss_diff_bounded: "\<forall>i\<in>{0..<n}. \<forall>z\<in>D. 
-                        (l (ridge_mine (S_index S i z) k)  (S i)) - (l (ridge_mine S k) (S i))
+                        (l (ridge_mine (S_index S i z) k)  (S i)) - 
+            (l (ridge_mine S k) (S i))
                          \<le> (2*\<rho>^2)/(k*n)"
 proof (rule)+
   fix i assume " i \<in> {0..<n}"
@@ -221,9 +222,9 @@ proof (rule)+
     then show ?thesis  using k_pos by auto
   next
     case False
-    have  assm1: "?v \<in> ridge_argmin (S_index S i z) k" using in_argmin S_index_is_sample
+    have  assm1: "?v \<in> ridge_argmin (S_index S i z) k" using k_pos in_argmin S_index_is_sample
       using \<open>i \<in> {0..<n}\<close> \<open>z \<in> set_pmf D\<close> by blast
-    have assm2: "?u \<in> ridge_argmin S k" using in_argmin S_in_D 
+    have assm2: "?u \<in> ridge_argmin S k" using in_argmin k_pos S_in_D 
         using \<open>i \<in> {0..<n}\<close> \<open>z \<in> set_pmf D\<close> by blast
     let ?loss_zi = "(\<lambda> h. l h (S i))"
     let ?loss_z =  "(\<lambda> h. l h z)"
@@ -323,25 +324,47 @@ lemma univ_to_exist: "A\<noteq>{} \<Longrightarrow> \<forall>x\<in>A. P x \<Long
  
 
 locale arbitrary_S_lipschitz = learning_basics1 +
-  fixes k :: "real" 
   assumes convl : "\<forall>y \<in> D. convex_on H (\<lambda> h. l h y)"
-    and k_pos : "k>0"
     and lipschitz : "\<forall>y\<in>D . \<rho>-lipschitz_on H  (\<lambda> h. l h y)"
+
 begin
-lemma replace_one_stable: "\<forall>i\<in>{0..<n}. 
+
+
+lemma integrable_D:"\<forall> S \<in> (Samples n D). integrable D (\<lambda> z. l (ridge_mine S k) z)" 
+proof
+  fix S
+  assume "S\<in> Samples n D"
+  then show "integrable D (\<lambda> z. l (ridge_mine S k) z)" 
+    using  learning_basics1.sample_in_D 
+    by (metis atLeastLessThan_iff diff_ge_0_iff_ge le0 le_neq_implies_less le_numeral_extra(2)
+ learning_basics1_axioms  less_add_same_cancel1 linorder_neqE_nat 
+    lipschitz lipschitz_on_nonneg n_pos not_add_less1 not_add_less2)
+qed
+
+lemma pred_err_integrable: "integrable (Samples n D) (\<lambda> S. pred_err_loss D l (ridge_mine S k))" 
+  by (meson diff_ge_0_iff_ge le_numeral_extra(2) lipschitz lipschitz_on_nonneg 
+        set_pmf_not_empty some_in_eq)
+
+lemma train_err_integrable:" integrable (Samples n D) (\<lambda> S. train_err_loss S n l (ridge_mine S k))" 
+  by (meson diff_ge_0_iff_ge le_numeral_extra(2) lipschitz lipschitz_on_nonneg
+        set_pmf_not_empty some_in_eq)
+
+
+
+lemma replace_one_stable: "\<forall>i\<in>{0..<n}.
                         measure_pmf.expectation (Samples (n+1) D)
-                        (\<lambda> S. (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+                        (\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i))) \<le> 
                         (2*\<rho>^2)/(k*n)"
 proof (rule)
   fix i
   assume " i \<in> {0..<n}"
   show "measure_pmf.expectation (Samples (n+1) D)
-                        (\<lambda> S. (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+                        (\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i))) \<le> 
                         (2*\<rho>^2)/(k*n)"
   proof -
-    have 1:"\<forall>S\<in> (Samples (n+1) D). (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+    have 1:"\<forall>S\<in> (Samples (n+1) D). (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i)) \<le>  (2*\<rho>^2)/(k*(n+1))"
     proof
       fix S
@@ -349,10 +372,10 @@ proof (rule)
       have "n \<in> {0..< n+1}" by auto
       then have " S n \<in> D" using sample_in_D[of "n+1"] `S \<in> (Samples (n+1) D)` 
         by blast
-      then show " (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+      then show " (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i)) \<le>  (2*\<rho>^2)/(k*(n+1))"
         using lipschitz_ridge_and_convex_loss.lipschitz_loss_diff_bounded 
-            [of H X Y D "n+1" l S k] ` i \<in> {0..<n}`
+            [of H X Y D "n+1" l k S] ` i \<in> {0..<n}`
         by (metis diff_ge_0_iff_ge lipschitz lipschitz_on_def)
     qed
 
@@ -364,36 +387,157 @@ proof (rule)
     have "(2*\<rho>^2)/k \<ge> 0" 
       using k_pos by auto
     then have "(2*\<rho>^2)/(k*(n+1)) \<le> (2*\<rho>^2)/(k*n)"  using \<open>1 \<le> n\<close> frac_le by fastforce
-    then have "\<forall>S\<in> (Samples (n+1) D). (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+    then have "\<forall>S\<in> (Samples (n+1) D). (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i)) \<le>  (2*\<rho>^2)/(k*n)" using 1 by auto
-    then have "AE S in (Samples (n+1) D).  (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+    then have "AE S in (Samples (n+1) D).  (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i)) \<le>  (2*\<rho>^2)/(k*n) "
       using AE_measure_pmf_iff by blast
-    then have "AE S in (Samples (n+1) D).  (\<lambda> S. (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+    then have "AE S in (Samples (n+1) D).  (\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i))) S \<le>  (2*\<rho>^2)/(k*n)" 
       by blast
 
-    then have " integral\<^sup>L (Samples (n+1) D) (\<lambda> S. (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+    then have " integral\<^sup>L (Samples (n+1) D) (\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                          (l  (ridge_mine S k) (S i))) \<le>  (2*\<rho>^2)/(k*n)" 
       using finite_M measure_M pos_const 
-        integral_bellow_const[of "(\<lambda> S. (l (ridge_mine (S_index S i (S n))k) (S i)) - 
+        integral_bellow_const[of "(\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
                                    (l  (ridge_mine S k) (S i)))"
                                    " (2*\<rho>^2)/(k*n)"
                                   "(Samples (n+1) D)"] by simp
     then show ?thesis by auto
   qed
 qed
+
+lemma sum_bounded_const:
+  fixes t::nat
+  fixes f :: "nat \<Rightarrow> real"
+  fixes a :: "real"
+  shows "\<forall> i \<in> {0..<t}. f i \<le> a \<Longrightarrow> sum f {0..<t} \<le> t * a"
+  proof (induct t)
+    case 0
+    then show ?case by auto
+  next
+    case (Suc t)
+    have "\<forall>i\<in>{0..<Suc t}. f i \<le> a" using Suc.prems by auto
+    have "sum f {0..<t} \<le> t * a"  using Suc.prems Suc.hyps by auto
+    then have "sum f {0..<t} + f t \<le> t * a + f t" using Suc.prems by auto
+    also have "t * a + f t \<le> t * a + a" using Suc.prems by auto
+    also have "t * a + a = (Suc t) * a"  by (simp add: semiring_normalization_rules(2))
+    finally show ?case by auto
+  qed
+
+lemma sum_bounded_const1:
+  fixes t::nat
+  fixes f :: "nat \<Rightarrow> real"
+  fixes a :: "real"
+  assumes "\<forall> i \<in> {0..<t}. f i \<le> a"
+  shows "sum f {0..<t} \<le> t * a"
+  using sum_bounded_const 
+  using assms by blast
+
+lemma replace_one_stable1: " 
+                        measure_pmf.expectation (pmf_of_set {0..<n}) (\<lambda> i. measure_pmf.expectation (Samples (n+1) D)
+                        (\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
+                         (l  (ridge_mine S k) (S i)))) \<le> 
+                        (2*\<rho>^2)/(k*n)"
+proof -
+  let ?f = "(\<lambda> i. measure_pmf.expectation (Samples (n+1) D)
+                        (\<lambda> S. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
+                         (l  (ridge_mine S k) (S i))))" 
+  have "sum ?f {0..<n} \<le> n * (2*\<rho>^2)/(k*n)" 
+    using replace_one_stable sum_bounded_const[of n ?f "(2*\<rho>^2)/(k*n)"] by simp
+  then have "sum ?f {0..<n} / n \<le>  n * (2*\<rho>^2)/(k*n) / n"
+    using divide_right_mono of_nat_0_le_iff by blast
+  then have "sum ?f {0..<n} / n \<le>  (2*\<rho>^2)/(k*n) " 
+    using n_pos by auto
+  then show ?thesis 
+    by (metis (no_types, lifting) card_atLeastLessThan card_empty diff_zero finite_atLeastLessThan integral_pmf_of_set le_zero_eq n_pos zero_neq_one)
+qed
+
+lemma replace_one_stable2: " 
+                        measure_pmf.expectation (Samples (n+1) D)
+                        (\<lambda> S. measure_pmf.expectation (pmf_of_set {0..<n}) (\<lambda> i. 
+                      (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
+                         (l  (ridge_mine S k) (S i)))) \<le> 
+                        (2*\<rho>^2)/(k*n)"
+proof -
+  let ?Dn1 = "(Samples (n+1) D)"
+  let ?f = "(\<lambda> S. (\<lambda> i. (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
+                         (l  (ridge_mine S k) (S i))))" 
+  have M_finite: "finite_measure ?Dn1" by auto
+    have measure_M:"measure (Samples (n+1) D) (space (Samples (n+1) D)) = 1" by simp
+    have pos_const: "(2*\<rho>^2)/(k*n) \<ge> 0" using k_pos by auto
+ 
+  have 1:"\<forall>S\<in> (Samples (n+1) D). \<forall> i \<in> {0..<n}.
+          ?f S i \<le>  (2*\<rho>^2)/(k*(n+1))"
+    proof (rule)+
+      fix S
+      fix i
+      assume " S \<in> (Samples (n+1) D)"
+      assume " i \<in> {0..<n}" 
+      have "n \<in> {0..< n+1}" by auto
+      then have " S n \<in> D" using sample_in_D[of "n+1"] `S \<in> (Samples (n+1) D)` 
+        by blast
+      then show " (l (ridge_mine (swapped_S1 S i) k) (S i)) - 
+                         (l  (ridge_mine S k) (S i)) \<le>  (2*\<rho>^2)/(k*(n+1))"
+        using lipschitz_ridge_and_convex_loss.lipschitz_loss_diff_bounded 
+            [of H X Y D "n+1" l k S] ` i \<in> {0..<n}`
+        by (metis diff_ge_0_iff_ge lipschitz lipschitz_on_def)
+    qed
+    have "\<forall> S \<in> ?Dn1. 
+        integral\<^sup>L (pmf_of_set {0..<n}) (\<lambda> i. ?f S i) \<le> (2*\<rho>^2)/(k*n)"
+    proof (rule)
+      fix S
+      assume "S\<in> ?Dn1"
+      have " {0..<n} \<noteq> {}" using n_pos by auto
+      have 2:  "(2*\<rho>^2)/(k*(n+1)) \<le> (2*\<rho>^2)/(k*n)" using n_pos 
+        by (simp add: frac_le k_pos)
+      have " \<forall> i \<in> {0..<n}. ?f S i \<le>  (2*\<rho>^2)/(k*(n+1))" using 1 `S\<in> ?Dn1` by auto
+      then have " \<forall> i \<in> {0..<n}. ?f S i \<le>  (2*\<rho>^2)/(k*n)"  using 2 by auto
+      then have " sum (\<lambda> i. ?f S i) {0..<n} \<le> n * ((2*\<rho>^2)/(k*n))"
+        using sum_bounded_const1[of n "(\<lambda> i. ?f S i)" "(2*\<rho>^2)/(k*n)"] `{0..<n} \<noteq> {}` 
+        by auto
+      then have "sum (\<lambda> i. ?f S i) {0..<n} / n \<le> n * ((2*\<rho>^2)/(k*n)) / n"
+        using divide_right_mono of_nat_0_le_iff by blast
+      then have "sum (\<lambda> i. ?f S i) {0..<n} / card {0..<n} \<le> ((2*\<rho>^2)/(k*n))"
+        using n_pos by auto
+      then show " integral\<^sup>L (pmf_of_set {0..<n}) (\<lambda> i. ?f S i) \<le> (2*\<rho>^2)/(k*n)"
+        by (metis (no_types, lifting) \<open>{0..<n} \<noteq> {}\<close> finite_atLeastLessThan integral_pmf_of_set)
+
+    qed
    
+
+    then have "AE S in (Samples (n+1) D).  
+     integral\<^sup>L (pmf_of_set {0..<n}) (\<lambda> i. ?f S i) \<le> (2*\<rho>^2)/(k*n) "
+      using AE_measure_pmf_iff by blast
+
+    then show " integral\<^sup>L (Samples (n+1) D)
+     (\<lambda> S.  integral\<^sup>L (pmf_of_set {0..<n}) (\<lambda> i. ?f S i)) \<le>  (2*\<rho>^2)/(k*n)" 
+      using M_finite measure_M pos_const 
+        integral_bellow_const[of " (\<lambda> S.  integral\<^sup>L (pmf_of_set {0..<n}) (\<lambda> i. ?f S i))"
+                              " (2*\<rho>^2)/(k*n)" ?Dn1] by simp
+  qed
+
+
+
 lemma lipschitz_stable: " measure_pmf.expectation (Samples n D) (\<lambda> S.
-                       pred_err_loss D l (ridge_mine S k) - train_err_loss S n l (ridge_mine S k))
+                       pred_err_loss D l (ridge_mine S k) -
+           train_err_loss S n l (ridge_mine S k))
                         \<le>  (2*\<rho>^2)/(k*n)"
 proof -
-  have " {0..<n} \<noteq> {}" using n_pos by auto
-  have "\<forall> i \<in> {0..<n}. measure_pmf.expectation (Samples n D) (\<lambda> S.
-                       pred_err_loss D l (ridge_mine S k) - train_err_loss S n l (ridge_mine S k))
-                        \<le>  (2*\<rho>^2)/(k*n)" using train_val_diff replace_one_stable by simp
+  have integrable_Si:"integrable (Samples (n+1) D) 
+      (\<lambda> S.  integral\<^sup>L (pmf_of_set {0..<n}) (\<lambda>i. l (ridge_mine S k) (S i)))"
 
-  then show ?thesis using `{0..<n} \<noteq> {}` by auto
+  by (meson diff_less_eq less_add_same_cancel1 linorder_neqE_linordered_idom linorder_not_less
+      lipschitz lipschitz_on_def set_pmf_not_empty some_in_eq zero_neq_one)
+
+  have integrable_swapped: "integrable (Samples (n+1) D)
+                        (\<lambda> S.  measure_pmf.expectation (pmf_of_set {0..<n})
+                     (\<lambda> i. (l (ridge_mine (swapped_S1 S i) k) (S i))))"
+ by (meson diff_less_eq less_add_same_cancel1 linorder_neqE_linordered_idom linorder_not_less
+      lipschitz lipschitz_on_def set_pmf_not_empty some_in_eq zero_neq_one)
+  show ?thesis
+  using train_val_diff replace_one_stable2 integrable_D integrable_Si integrable_swapped 
+       pred_err_integrable  train_err_integrable by auto
 qed
 
 
