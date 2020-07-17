@@ -172,7 +172,7 @@ proof (rule ccontr)
 qed
 
 lemma LIM_fun_less_zero1: "f \<midarrow>a\<rightarrow> l \<Longrightarrow> l < 0 \<Longrightarrow> \<exists>r>0. \<forall>x. x \<noteq> a \<and> norm(a - x) < r \<longrightarrow> f x < 0"
-  for a :: "'b::real_normed_vector" and  l :: "real"
+  for a :: "'b::euclidean_space" and  l :: "real"
 proof -
   assume "f \<midarrow>a\<rightarrow> l" "l < 0" 
   then have "\<exists>r. 0 < r \<and> (\<forall>x. x \<noteq> a \<and> norm(a - x) < r \<longrightarrow> norm (f x - l)< -l)" 
@@ -367,5 +367,23 @@ qed
 
 lemma strong_conv_if_eq: " f = g \<Longrightarrow> strong_convex_on s f k \<Longrightarrow> strong_convex_on s g k"
   using  HOL.subst by auto
+
+lemma strong_conv_then_conv:
+  assumes k_pos: "k \<ge> 0" 
+  shows "strong_convex_on s f k \<Longrightarrow> convex_on s f"
+proof -
+  assume "strong_convex_on s f k"
+  then have 1:" (\<forall>x\<in>s. \<forall>y\<in>s. \<forall>u\<ge>0. \<forall>v\<ge>0. u + v = 1 \<longrightarrow>
+     f (u *\<^sub>R x + v *\<^sub>R y) \<le> u * f x + v * f y - (k/2) * u * v * norm(x-y) * norm(x-y) )"
+    unfolding strong_convex_on_def by auto
+  have "\<forall>x\<in>s. \<forall>y\<in>s. \<forall>u\<ge>0. \<forall>v\<ge>0. u + v = 1 \<longrightarrow> (k/2) * u * v * norm(x-y) * norm(x-y) \<ge> 0"
+    using k_pos  by simp
+  then have "\<forall>x\<in>s. \<forall>y\<in>s. \<forall>u\<ge>0. \<forall>v\<ge>0. u + v = 1 \<longrightarrow> 
+  u * f x + v * f y - (k/2) * u * v * norm(x-y) * norm(x-y)  \<le>
+  u * f x + v * f y " by auto
+  then have "(\<forall>x\<in>s. \<forall>y\<in>s. \<forall>u\<ge>0. \<forall>v\<ge>0. u + v = 1 \<longrightarrow>
+     f (u *\<^sub>R x + v *\<^sub>R y) \<le> u * f x + v * f y)" using 1 by smt
+  then show "convex_on s f"  by (simp add: convex_on_def)
+qed
 
 end

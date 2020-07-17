@@ -37,7 +37,7 @@ proof -
       by (simp add: Suc.hyps Suc.prems convex_fun_add)
   qed
   have "(\<Sum>i = 0..<n.(\<lambda>h. l h (S i))) = (\<lambda>h. \<Sum>i = 0..<n. l h (S i))" 
-  proof(induct n)
+  proof(induct n) 
     case 0
     then show ?case 
       by (simp add: zero_fun_def)
@@ -55,19 +55,21 @@ qed
 
 text\<open>Define a locale for cleaner proofs and definitions\<close>
 locale learning_basics1 =
- 
- fixes H :: "'a::euclidean_space set"
-    and X :: "'b set"
-    and Y :: "'c set"
-    and D :: "('b \<times> 'c) pmf"
-    and n :: "nat"
-    and l :: "('a  \<Rightarrow> ('b \<times> 'c) \<Rightarrow> real)"
-  assumes nnH: "H \<noteq> {}" 
-    and  convH: "convex H"
-    and l_pos: "\<forall>h\<in>H. \<forall>z\<in>D. l h z \<ge> 0"
-    and convll : "\<forall>z \<in> D. convex_on H (\<lambda> h. l h z)"
-    and "set_pmf D \<subseteq> (X\<times>Y)"
-    and n_pos: "n\<ge>1"
+
+fixes H :: "'a::euclidean_space set"
+  and X :: "'b set"
+  and Y :: "'c set"
+  and D :: "('b \<times> 'c) pmf"
+  and n :: "nat"
+  and l :: "('a  \<Rightarrow> ('b \<times> 'c) \<Rightarrow> real)"
+  and k :: "real" 
+assumes nnH: "H \<noteq> {}" 
+  and  convH: "convex H"
+  and l_pos: "\<forall>h\<in>H. \<forall>z\<in>D. l h z \<ge> 0"
+  and convll : "\<forall>z \<in> D. convex_on H (\<lambda> h. l h z)"
+  and "set_pmf D \<subseteq> (X\<times>Y)"
+  and n_pos: "n\<ge>1"
+ and k_pos : "k>0"
 begin
 
 text \<open>"Regularized Loss Minimization" 
@@ -92,14 +94,24 @@ definition ridge_argmin :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> real \<R
 definition ridge_mine :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> real \<Rightarrow> 'a::euclidean_space" where
   "ridge_mine S' k' = (SOME h. h \<in> ridge_argmin S' k')"
 
-definition swapped_S :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> real \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
-  "swapped_S S' i =  S' " 
+definition swapped_S :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> nat \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
+  "swapped_S S' i =  S'(i:= S' n, n:= S' i) "  
 
-definition truncated_S :: "(nat \<Rightarrow> ('b * 'c))  \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
-  "truncated_S S' =  S'(n+1 := undefined) "
+definition truncated_S :: "(nat \<Rightarrow> ('b * 'c))  \<Rightarrow> nat \<Rightarrow>(nat \<Rightarrow> ('b * 'c))" where
+  "truncated_S S' m =  S'(m := undefined) "
 
-lemma sample_in_D: "\<forall>S \<in> (Samples m D). \<forall>i\<in>{0..<m}. S i \<in> set_pmf D" 
-  sorry
+lemma set_pmf_Pi_pmf: "\<And>S i. finite A \<Longrightarrow> S \<in> set_pmf (Pi_pmf A dflt Q)
+                   \<Longrightarrow> i \<in> A \<Longrightarrow> S i \<in> set_pmf (Q i)" 
+  apply(subst set_pmf_iff)
+  apply(subst (asm) set_pmf_iff) 
+  apply(subst (asm) pmf_Pi) apply simp apply auto
+  using prod_zero by metis 
+
+
+lemma sample_in_D: "\<forall>S \<in> (Samples m D). \<forall>i\<in>{0..<m}. S i \<in>  D" 
+   unfolding Samples_def  using  set_pmf_Pi_pmf 
+   by (metis finite_atLeastLessThan)
+
 
 lemma train_err_loss_convex: "\<forall>S \<in> (Samples n D).convex_on H (train_err_loss S n l)"
   using train_err_loss_if_convex convll sample_in_D  by blast
@@ -110,94 +122,48 @@ proof
   assume "S \<in> (Samples n D)"
   show "strong_convex_on H (ridge_fun S k) (2*k)" 
   proof -
-  have "strong_convex_on H (\<lambda> w. k * (norm w)*(norm w)) (2*k)" using sq_norm_strong_convex 
-    by blast
-  moreover  have  "(\<lambda> w. k * (norm w)*(norm w)) = (\<lambda> w. k * (norm w)^2)" using power2_eq_square 
-    by (simp add: semiring_normalization_rules(17) semiring_normalization_rules(29))
+    have "strong_convex_on H (\<lambda> w. k * (norm w)*(norm w)) (2*k)" using sq_norm_strong_convex 
+      by blast
+    moreover  have  "(\<lambda> w. k * (norm w)*(norm w)) = (\<lambda> w. k * (norm w)^2)" using power2_eq_square 
+      by (simp add: semiring_normalization_rules(17) semiring_normalization_rules(29))
 
-  ultimately  have "strong_convex_on H (\<lambda> w. k * (norm w)^2) (2*k)" using 
-      strong_conv_if_eq by auto
+    ultimately  have "strong_convex_on H (\<lambda> w. k * (norm w)^2) (2*k)" using 
+        strong_conv_if_eq by auto
 
-  then have "strong_convex_on H (train_err_loss S n l + (\<lambda> w. k * (norm w)^2)) (2*k)" 
-    using strong_convex_sum train_err_loss_convex add.commute
-    by (metis \<open>S \<in> set_pmf (Samples n D)\<close>)
-  then show ?thesis by auto
+    then have "strong_convex_on H (train_err_loss S n l + (\<lambda> w. k * (norm w)^2)) (2*k)" 
+      using strong_convex_sum train_err_loss_convex add.commute `S \<in> (Samples n D)` by metis
+    then show ?thesis by auto
+  qed
 qed
-qed
 
-lemma ridge_convex1: "\<forall>S \<in> (Samples n D). convex_on H (ridge_fun S k)"
+lemma ridge_convex:
+  shows "\<forall>S \<in> (Samples n D). convex_on H (ridge_fun S k)"
+  using strong_conv_then_conv ridge_strong_convex k_pos by smt
+
+lemma convex_has_min: 
+  fixes f :: " _ \<Rightarrow> real"
+  assumes "convex_on H f"
+  shows "\<exists>x\<in>H. is_arg_min f (\<lambda>z. z\<in>H) x" 
   sorry
 
-lemma convex_has_min: "convex_on H f \<Longrightarrow> \<exists>x\<in>H. is_arg_min f (\<lambda>z. z\<in>H) x" 
-  sorry
-
-lemma in_argmin: "\<forall>S \<in> (Samples n D). (ridge_mine S k) \<in> (ridge_argmin S k)"
+lemma in_argmin: 
+assumes k_pos: "k > 0"
+shows"\<forall>S \<in> (Samples n D). (ridge_mine S k) \<in> (ridge_argmin S k)"
 proof 
   fix S
   assume " S \<in> Samples n D"
   show "(ridge_mine S k) \<in> (ridge_argmin S k)" 
   proof -
-   let ?P = "(\<lambda> h. h \<in> ridge_argmin S k)"
-  have "\<exists>h. is_arg_min (ridge_fun S k) (\<lambda>s. s \<in> H) h" using 
-        `S \<in> (Samples n D)` ridge_convex1 convex_has_min nnH convH by auto
-  then have "ridge_argmin S k \<noteq> {}" unfolding ridge_argmin_def using nnH convH 
-     by blast
-  have "\<exists>h. ?P h" unfolding ridge_argmin_def  using nnH
-    using \<open>\<exists>h. is_arg_min (ridge_fun S k) (\<lambda>s. s \<in> H) h\<close> by blast
-  show  "(ridge_mine S k) \<in> (ridge_argmin S k)" unfolding ridge_mine_def using 
-      someI2[of "?P" "(ridge_mine S k)" ?P ]
-    by (metis (no_types, lifting) Collect_cong Set.empty_def \<open>ridge_argmin S k \<noteq> {}\<close> mem_Collect_eq ridge_argmin_def verit_sko_ex_indirect)
-qed
-qed
-
-
-text\<open>S_index is a set where the i-th data point in S is replaced with an arbitrary one\<close>
-definition S_index :: "(nat \<Rightarrow> ('b \<times> 'c)) \<Rightarrow> nat \<Rightarrow> ('b \<times> 'c) \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
-  "S_index S' i z = S'(i := z)"
-
-lemma S_index_similar : "\<forall>i. \<forall> j \<noteq> i. l v (S' j) = l v ((S_index S' i z) j)"
-  by (simp add: S_index_def)
-
-lemma sum_split :"\<forall>i \<in>{0..<n}. sum f {0..<n} = sum f {0..<i} + f i + sum f {i+1..<n}"
-  for f :: "nat \<Rightarrow> real"
-proof 
-  fix i assume"i \<in>{0..<n}"
-  show "sum f {0..<n} = sum f {0..<i} + f i + sum f {i+1..<n}"
-  proof -
-    have 1: "({0..<i} \<inter> {i..<n}) = {} " using `i \<in>{0..<n}`  using ivl_disj_int_two(3) by blast
-
-    have "{0..<n} = ({0..<i} \<union> {i..<n})" using `i \<in>{0..<n}` by auto
-    then  have "sum f {0..<n} = sum f ({0..<i} \<union> {i..<n})" by simp
-    also have "sum f ({0..<i} \<union> {i..<n}) = 
-      sum f {0..<i} + sum f {i..<n} - sum f ({0..<i} \<inter> {i..<n})"
-      using sum_Un by blast
-    also have "sum f {0..<i} + sum f {i..<n} - sum f ({0..<i} \<inter> {i..<n}) = 
-              sum f {0..<i} + sum f {i..<n}" using 1 by auto
-    also have " sum f {0..<i} + sum f {i..<n} = 
-          sum f {0..<i} + f i + sum f {i+1..<n}" 
-      using \<open>i \<in> {0..<n}\<close> sum.atLeast_Suc_lessThan by fastforce
-    finally show "sum f {0..<n} = sum f {0..<i} + f i + sum f {i+1..<n}" by auto
+    have "\<exists>h. is_arg_min (ridge_fun S k) (\<lambda>s. s \<in> H) h" using 
+        `S \<in> (Samples n D)` ridge_convex k_pos convex_has_min nnH convH by auto
+    then have "ridge_argmin S k \<noteq> {}" unfolding ridge_argmin_def using nnH convH 
+      by blast
+    then show  "(ridge_mine S k) \<in> (ridge_argmin S k)"
+      unfolding ridge_mine_def using some_in_eq by blast
   qed
 qed
 
-lemma S_index_eq_without_i : " i \<notin> A \<Longrightarrow>
-     sum (\<lambda> j.  l v (S' j)) A = sum (\<lambda> j. l v ((S_index S' i z) j)) A"
-proof -
-  assume  "i \<notin> A" 
-  then  show "sum (\<lambda> j.  l v (S' j)) A = sum (\<lambda> j. l v ((S_index S' i z) j)) A" 
-    by (metis (mono_tags, lifting) S_index_similar  sum.cong)
-qed
-
-lemma train_val_diff : "\<forall> i \<in> {0..<n}. measure_pmf.expectation (Samples n D) (\<lambda> S.
-                       pred_err_loss D l (ridge_mine S k) - train_err_loss S n l (ridge_mine S k)) 
-                    =  measure_pmf.expectation (Samples (n+1) D)
-                        (\<lambda> S. (l (ridge_mine (S_index S i (S n))k) (S i)) - 
-                         (l  (ridge_mine S k) (S i)))" 
-  sorry
-  
-
-end 
-
+end
 
 
 
