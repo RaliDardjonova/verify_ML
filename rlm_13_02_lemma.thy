@@ -5,9 +5,7 @@ begin
 context learning_basics1
 begin
 
-text\<open>S_index is a set where the i-th data point in S is replaced with an arbitrary one\<close>
-definition S_index :: "(nat \<Rightarrow> ('b \<times> 'c)) \<Rightarrow> nat \<Rightarrow> ('b \<times> 'c) \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
-  "S_index S' i z = S'(i := z)"
+
 
 lemma S_index_similar : "\<forall>i. \<forall> j \<noteq> i. l v (S' j) = l v ((S_index S' i z) j)"
   by (simp add: S_index_def)
@@ -107,15 +105,16 @@ proof
 qed
 
 lemma pmf_swapped_same:
-  "\<forall> i \<in> {0..<n+1}. pmf (Samples (n+1) D) f  = pmf (Samples (n+1) D) (f(i:=(f n),n:=(f i)))"
+    assumes m_pos: "m > 0"
+    shows "\<forall> i \<in> {0..<m}. pmf (Samples m D) f  = pmf (Samples m D) (f(i:=(f (m-1)),(m-1):=(f i)))"
 proof 
   fix i
-  assume "i \<in> {0..<n+1}"
-  let ?f' = "(f(i:=(f n),n:=(f i)))"
-  let ?Dn1 = "Samples (n+1) D"
-  let ?I = "{0..<n+1}"
+  assume "i \<in> {0..<m}"
+  let ?f' = "(f(i:=(f (m-1)),(m-1):=(f i)))"
+  let ?Dn1 = "Samples (m) D"
+  let ?I = "{0..<m}"
   have "finite ?I" by auto
-  have "finite {i,n}" by auto
+  have "finite {i,(m-1)}" by auto
 
   have 1: "pmf ?Dn1 f = (if (\<forall>x. x \<notin> ?I \<longrightarrow> f x = undefined) then
            \<Prod>x\<in>?I. pmf ((\<lambda>_. D) x) (f x) else 0)"
@@ -132,23 +131,23 @@ proof
   proof (cases "(\<forall>x. x \<notin> ?I \<longrightarrow> f x = undefined)")
     case True
     have "(\<Prod>x\<in>?I. pmf D (f x)) = (\<Prod>x\<in>?I. pmf D (?f' x))"
-    proof(cases "i=n")
+    proof(cases "i=(m-1)")
       case True
       then show ?thesis by auto
     next
       case False
-      have inter_empty: "(?I - {i,n}) \<inter> {i,n} = {}" by auto
-      have union_I : "(?I - {i,n}) \<union> {i,n} = ?I"
+      have inter_empty: "(?I - {i,(m-1)}) \<inter> {i,(m-1)} = {}" by auto
+      have union_I : "(?I - {i,(m-1)}) \<union> {i,(m-1)} = ?I"
         using Diff_cancel \<open>i \<in> ?I\<close> by auto
 
-      have " (\<Prod>x\<in>(?I - {i,n}). pmf D (?f' x)) * (\<Prod>x\<in>{i,n}.(pmf D (?f' x))) = 
-                (\<Prod>x\<in>(?I - {i,n}). pmf D (f x)) * (\<Prod>x\<in>{i,n}.(pmf D (f x)))"
+      have " (\<Prod>x\<in>(?I - {i,(m-1)}). pmf D (?f' x)) * (\<Prod>x\<in>{i,(m-1)}.(pmf D (?f' x))) = 
+                (\<Prod>x\<in>(?I - {i,(m-1)}). pmf D (f x)) * (\<Prod>x\<in>{i,(m-1)}.(pmf D (f x)))"
         using prod.union_disjoint False by auto
-      then show ?thesis  using `finite {i,n}` `finite ?I` 
+      then show ?thesis  using `finite {i,(m-1)}` `finite ?I` 
           inter_empty union_I prod.union_disjoint  finite_Diff by metis   
     qed
     then show ?thesis using 1 2 True 
-      using \<open>i \<in> {0..<n + 1}\<close> fun_upd_other by auto 
+      using \<open>i \<in> {0..<m}\<close> fun_upd_other by auto 
   next
     case False
     have "pmf ?Dn1 f = 0"  using False "1" by auto
@@ -158,36 +157,37 @@ proof
   qed
 qed
 
-lemma inj_swapped: "inj (\<lambda> S. swapped_S S i)"
+lemma inj_swapped: "inj (\<lambda> S. swapped_S S i m)"
 proof (rule)
   fix x
   fix y
-  show " x \<in> UNIV \<Longrightarrow> y \<in> UNIV \<Longrightarrow> swapped_S x i = swapped_S y i \<Longrightarrow> x = y"
+  show " x \<in> UNIV \<Longrightarrow> y \<in> UNIV \<Longrightarrow> swapped_S x i m = swapped_S y i m \<Longrightarrow> x = y"
   proof
     fix xa
     assume "x \<in> UNIV"
     assume "y \<in> UNIV"
-    assume "swapped_S x i = swapped_S y i"
-    then have "x (i:= x n, n:= x i) = y(i:= y n, n:= y i)" 
+    assume "swapped_S x i m = swapped_S y i m"
+    then have "x (i:= x m, m:= x i) = y(i:= y m, m:= y i)" 
       using swapped_S_def by auto
     show "x xa = y xa" 
-      by (smt \<open>x(i := x n, n := x i) = y(i := y n, n := y i)\<close> fun_upd_eqD fun_upd_triv fun_upd_twist)
+      by (smt \<open>x(i := x m, m := x i) = y(i := y m, m := y i)\<close> fun_upd_eqD fun_upd_triv fun_upd_twist)
   qed
 qed
 
 lemma map_pmf_swap_same: 
-  "\<forall>i \<in> {0..<n+1}. pmf (Samples (n+1) D) x =
-         pmf (map_pmf (\<lambda> S. swapped_S S i) (Samples (n+1) D)) x" 
+    assumes m_pos: "m > 0"
+    shows "\<forall>i \<in> {0..<m}. pmf (Samples m D) x =
+         pmf (map_pmf (\<lambda> S. swapped_S S i (m-1)) (Samples m D)) x" 
 proof 
   fix i
-  assume "i \<in> {0..<n+1}"
-  let ?M = "(Samples (n+1) D)"
-  let ?f = "(\<lambda> S. swapped_S S i)"
+  assume "i \<in> {0..<m}"
+  let ?M = "(Samples m D)"
+  let ?f = "(\<lambda> S. swapped_S S i (m-1))"
 
   have "pmf ?M x =pmf ?M (?f x) " 
-    using  pmf_swapped_same swapped_S_def  by (metis \<open>i \<in> {0..<n + 1}\<close>)
-  also have "\<dots> = pmf (map_pmf ?f ?M) (?f (swapped_S x i))" 
-    using  inj_swapped pmf_map_inj' by metis
+    using  pmf_swapped_same[of m x] swapped_S_def m_pos  by (metis \<open>i \<in> {0..<m}\<close>)
+  also have "\<dots> = pmf (map_pmf ?f ?M) (?f (swapped_S x i (m-1)))" 
+    using  inj_swapped[of i "(m-1)"] pmf_map_inj' by metis
   also have " \<dots> =  pmf (map_pmf ?f ?M) x" 
     by (simp add: swapped_S_def)
   then show "pmf ?M x = pmf (map_pmf ?f ?M) x"
@@ -196,12 +196,14 @@ qed
 
 lemma expect_sample_swap_same:
   fixes f :: "_ \<Rightarrow> real"
-  assumes i_le_n: "i \<in> {0..<n+1}"
-  shows "measure_pmf.expectation (Samples (n+1) D) f  =
-           measure_pmf.expectation (map_pmf (\<lambda> S. swapped_S S i) (Samples (n+1) D)) f"
+  fixes m :: "nat"
+   assumes m_pos: "m > 0"
+  assumes i_le_n: "i \<in> {0..<m}"
+  shows "measure_pmf.expectation (Samples m D) f  =
+           measure_pmf.expectation (map_pmf (\<lambda> S. swapped_S S i (m-1)) (Samples m D)) f"
 proof -
-  let ?M = "(Samples (n+1) D)"
-  let ?M_swap = "(map_pmf (\<lambda> S. swapped_S S i) (Samples (n+1) D))"
+  let ?M = "(Samples m D)"
+  let ?M_swap = "(map_pmf (\<lambda> S. swapped_S S i (m-1)) (Samples m D))"
 
   have "integral\<^sup>L ?M f  =  infsetsum (\<lambda>x. pmf ?M x * f x) UNIV"
     using pmf_expectation_eq_infsetsum by auto
@@ -212,33 +214,73 @@ proof -
   finally show ?thesis  by auto
 qed
 
+
+lemma integrable_f_swap_same:
+  fixes f :: "_ \<Rightarrow> real"
+  fixes m :: "nat"
+  assumes m_pos: "m > 0"
+  assumes f_nn: "\<forall>x\<in> (Samples m D). f x \<ge> 0"
+  assumes i_le_n: "i \<in> {0..<m}"
+  shows "integrable (Samples m D) f  =
+          integrable  (Samples m D) (\<lambda> x. f (swapped_S x i (m-1)))"
+proof -
+  let ?M = "Samples m D"
+  let ?g = "(\<lambda> x. f (swapped_S x i (m-1)))"
+  have "\<forall>x\<in>?M. (swapped_S x i (m-1)) \<in> ?M" 
+    by (metis i_le_n m_pos pmf_eq_0_set_pmf pmf_swapped_same swapped_S_def)
+  then have 1:"\<forall>x \<in> ?M. ennreal (norm (?g x)) = ?g x" using f_nn
+    by simp
+  have "\<forall>x \<in> ?M. ennreal (norm (f x)) = f x" using f_nn by simp
+  then have "integral\<^sup>N ?M (\<lambda> x. ennreal (norm (f x))) = integral\<^sup>N ?M f"
+    by (simp add: AE_measure_pmf_iff nn_integral_cong_AE)
+  also have "integral\<^sup>N (Samples m D) f = 
+    integral\<^sup>N (map_pmf (\<lambda>f. swapped_S f i (m-1)) (Samples m D)) f"
+    using expect_sample_swap_same[of m i f] i_le_n m_pos 
+    by (metis map_pmf_swap_same pmf_eqI)
+  also have " integral\<^sup>N (map_pmf (\<lambda>f. swapped_S f i (m-1)) (Samples m D)) f =
+         integral\<^sup>N (Samples m D) (\<lambda> x. f (swapped_S x i (m-1)))" by auto
+  also have " \<dots> =  integral\<^sup>N (Samples m D) (\<lambda> x. ennreal( norm(f (swapped_S x i (m-1)))))"
+    using 1  by (simp add: AE_measure_pmf_iff nn_integral_cong_AE)
+  finally have "integral\<^sup>N ?M (\<lambda> x. ennreal (norm (f x))) =
+              integral\<^sup>N (Samples m D) (\<lambda> x. ennreal( norm(f (swapped_S x i (m-1)))))" by auto
+  then have 2: "integral\<^sup>N ?M (\<lambda> x. ennreal (norm (f x))) < \<infinity> \<longleftrightarrow>
+       integral\<^sup>N (Samples m D) (\<lambda> x. ennreal( norm(f (swapped_S x i (m-1))))) < \<infinity>" by auto
+  have 3: "f \<in> borel_measurable ?M" by auto
+  have "(\<lambda> x. f (swapped_S x i (m-1))) \<in> borel_measurable ?M" by auto
+  then show ?thesis using 2 3 integrable_iff_bounded
+    by (metis (mono_tags, lifting) nn_integral_cong)
+qed
+
 lemma expect_f_swap_same:
   fixes f :: "_ \<Rightarrow> real"
-  assumes i_le_n: "i \<in> {0..<n+1}"
-  shows "measure_pmf.expectation (Samples (n+1) D) f  =
-           measure_pmf.expectation  (Samples (n+1) D) (\<lambda> x. f (swapped_S x i))"
+  fixes m :: "nat"
+  assumes m_pos: "m > 0"
+  assumes i_le_n: "i \<in> {0..<m}"
+  shows "measure_pmf.expectation (Samples m D) f  =
+           measure_pmf.expectation  (Samples m D) (\<lambda> x. f (swapped_S x i (m-1)))"
 proof -
-  have "measure_pmf.expectation (Samples (n+1) D) f = 
-    measure_pmf.expectation (map_pmf (\<lambda>f. swapped_S f i) (Samples (n+1) D)) f"
-    using expect_sample_swap_same i_le_n by blast
-  then show ?thesis by simp
+  have "measure_pmf.expectation (Samples m D) f = 
+    measure_pmf.expectation (map_pmf (\<lambda>f. swapped_S f i (m-1)) (Samples m D)) f"
+    using expect_sample_swap_same[of m i f] i_le_n m_pos  by blast
+  then show ?thesis by auto
 qed
 
 
 lemma ridge_mine_swap: 
   "\<forall> i\<in>{0..<n+1}. measure_pmf.expectation (Samples (n+1) D) (\<lambda> Sz. l (ridge_mine  Sz k) (Sz n)) =
-       measure_pmf.expectation (Samples (n+1) D) (\<lambda> Sz. l (ridge_mine  (swapped_S Sz i) k) (Sz i))"
+       measure_pmf.expectation (Samples (n+1) D) (\<lambda> Sz. l (ridge_mine  (swapped_S Sz i n) k) (Sz i))"
 proof 
   fix i
   assume "i\<in>{0..<n+1}"
   let ?M = " (Samples (n+1) D)"
   let ?f = "(\<lambda> Sz. l (ridge_mine  Sz k) (Sz n))" 
+
   have " measure_pmf.expectation ?M ?f =
-       measure_pmf.expectation ?M (\<lambda> x. ?f (swapped_S x i))" 
-    using expect_f_swap_same[of i ?f] `i\<in> {0..<n+1}` by blast
+       measure_pmf.expectation ?M (\<lambda> x. ?f (swapped_S x i n))" 
+    using expect_f_swap_same[of "n+1" i ?f] `i\<in> {0..<n+1}`  by auto 
 
   then show " measure_pmf.expectation ?M ?f =
-       measure_pmf.expectation ?M (\<lambda> Sz. l (ridge_mine (swapped_S Sz i) k) (Sz i))"
+       measure_pmf.expectation ?M (\<lambda> Sz. l (ridge_mine (swapped_S Sz i n) k) (Sz i))"
     unfolding swapped_S_def 
     by (metis (no_types, lifting) Bochner_Integration.integral_cong fun_upd_same)
 
@@ -252,9 +294,19 @@ lemma same_integral_restricted[simp]:
   by (metis (no_types, lifting) Bochner_Integration.integral_cong assms indicator_simps(2)
       integral_measure_pmf_real_indicator mult_not_zero)
 
+
+
 lemma same_nn_integral_restricted:
   fixes f ::"(  _ \<Rightarrow> real)"
   fixes g ::"(  _ \<Rightarrow> real)"
+  assumes "\<forall> x \<in> set_pmf M. f x = g x"
+  shows "integral\<^sup>N M f = integral\<^sup>N M g"
+  by (metis (mono_tags, lifting) assms ennreal_0 mult_not_zero nn_integral_cong 
+      nn_integral_measure_pmf pmf_eq_0_set_pmf)
+
+lemma same_nn_integral_restricted1:
+  fixes f ::"(  _ \<Rightarrow> ennreal)"
+  fixes g ::"(  _ \<Rightarrow> ennreal)"
   assumes "\<forall> x \<in> set_pmf M. f x = g x"
   shows "integral\<^sup>N M f = integral\<^sup>N M g"
   by (metis (mono_tags, lifting) assms ennreal_0 mult_not_zero nn_integral_cong 
@@ -397,7 +449,6 @@ lemma expectation_pair_pmf':
 lemma add_sample_expectation:
   fixes f ::"( _  \<Rightarrow> _ \<Rightarrow> real)"
   fixes m :: "nat"
-  assumes m_pos: "m>0" 
   assumes f_nn: "\<forall>S\<in> (Samples m D). \<forall>z\<in>D. f S z \<ge> 0"
   assumes integrable_D: "\<forall> S \<in> (Samples m D). integrable D (f S)"
   shows    "measure_pmf.expectation (Samples m D) (\<lambda> S. measure_pmf.expectation D (\<lambda> z. f S z)) =
@@ -441,6 +492,9 @@ proof -
 
   then show ?thesis using truncated_S_def by auto
 qed
+
+
+
 
 lemma integrable_uniform : "\<forall> S \<in> (Samples n D). integrable D (\<lambda> _.  
        measure_pmf.expectation (pmf_of_set {0..<n}) (\<lambda>i. l (ridge_mine S k) (S i)))"
@@ -566,32 +620,40 @@ proof -
     by (simp add: integral_pmf_of_set)
 qed
 
-lemma min_of_Dn1_in_H: "\<forall> S \<in> (Samples (n+1) D). (ridge_mine S k) \<in> H" 
-proof 
-  let ?M = "(Samples (n+1) D)"
-  let ?I = "{0..<n}"
+lemma truncated_S_in_Dn: "\<forall> S \<in> (Samples (m+1) D). truncated_S S m \<in> Samples m D"
+proof  
+  let ?M = "(Samples (m+1) D)"
+  let ?I = "{0..<m}"
   fix S
   assume "S \<in> ?M" 
-  have "finite {0..<n+1}" by auto 
+  have "finite {0..<m+1}" by auto 
   have "finite ?I" by auto
   then have 1: " pmf ?M S > 0" using pmf_positive_iff `S \<in> ?M` by fast 
-  then have "\<forall> i. i \<notin> {0..<n+1} \<longrightarrow> S i = undefined" using pmf_pos[of "(n+1)" S] n_pos by auto
-  then have "pmf ?M S = (\<Prod>x\<in>{0..<n+1}. pmf D (S x))"
-    using pmf_Pi'[of "{0..<n+1}" S undefined "(\<lambda> _. D)"] `finite {0..<n+1}`  
+  then have "\<forall> i. i \<notin> {0..<m+1} \<longrightarrow> S i = undefined" using pmf_pos[of "(m+1)" S] n_pos by auto
+  then have "pmf ?M S = (\<Prod>x\<in>{0..<m+1}. pmf D (S x))"
+    using pmf_Pi'[of "{0..<m+1}" S undefined "(\<lambda> _. D)"] `finite {0..<m+1}`  
     by (metis Samples_def)
-  then have "\<forall>x \<in> {0..<n+1}.  pmf D (S x) > 0 " 
+  then have "\<forall>x \<in> {0..<m+1}.  pmf D (S x) > 0 " 
     by (meson \<open>S \<in> ?M\<close> pmf_positive sample_in_D)
   then have 2: "(\<Prod>x\<in>?I. pmf D (S x)) > 0" 
     by (simp add: prod_pos)
-  have "\<And>x. x \<notin> ?I \<Longrightarrow> (truncated_S S n) x = undefined" 
-    by (simp add: \<open>\<forall>i. i \<notin> {0..<n + 1} \<longrightarrow> S i = undefined\<close> truncated_S_def)
-  then have "pmf (Samples n D) (truncated_S S n) = (\<Prod>x\<in>?I. pmf D (S x))" unfolding Samples_def
-    using pmf_Pi'[of ?I "truncated_S S n" undefined "(\<lambda> _. D)"]  `finite ?I` 
+  have "\<And>x. x \<notin> ?I \<Longrightarrow> (truncated_S S m) x = undefined" 
+    by (simp add: \<open>\<forall>i. i \<notin> {0..<m + 1} \<longrightarrow> S i = undefined\<close> truncated_S_def)
+  then have "pmf (Samples m D) (truncated_S S m) = (\<Prod>x\<in>?I. pmf D (S x))" unfolding Samples_def
+    using pmf_Pi'[of ?I "truncated_S S m" undefined "(\<lambda> _. D)"]  `finite ?I` 
     using truncated_S_def by auto
-  then have "pmf (Samples n D) (truncated_S S n) > 0" using 2 by auto
+  then have "pmf (Samples m D) (truncated_S S m) > 0" using 2 by auto
 
-  then have "truncated_S S n \<in> Samples n D"
+  then show "truncated_S S m \<in> Samples m D"
     by (simp add: set_pmf_iff)
+qed
+
+lemma min_of_Dn1_in_H: "\<forall> S \<in> (Samples (n+1) D). (ridge_mine S k) \<in> H" 
+proof 
+  let ?M = "(Samples (n+1) D)"
+  fix S
+  assume "S \<in> ?M" 
+  then have "truncated_S S n \<in> Samples n D" using truncated_S_in_Dn `S \<in> ?M`  by auto
   then have "(ridge_mine (truncated_S S n) k) \<in> H" using min_in_H by auto
   then show "(ridge_mine S k) \<in> H" 
     using truncated_same_min by auto
@@ -603,7 +665,7 @@ lemma train_val_diff :
   assumes  train_err_integrable: " integrable (Samples n D)  (\<lambda> S. train_err_loss S n l (ridge_mine S k)) "
   assumes integrable_swapped_Si: " integrable (Samples (n+1) D)
                         (\<lambda> S.  measure_pmf.expectation (pmf_of_set {0..<n})
-                     (\<lambda> i.  (l (ridge_mine (swapped_S S i) k) (S i))))"
+                     (\<lambda> i.  (l (ridge_mine (swapped_S S i n) k) (S i))))"
   assumes integrable_Si: " integrable (Samples (n+1) D)
                         (\<lambda> S.  measure_pmf.expectation (pmf_of_set {0..<n})
                      (\<lambda> i.  (l  (ridge_mine S k) (S i))))"
@@ -611,13 +673,13 @@ lemma train_val_diff :
           (\<lambda> S. pred_err_loss D l (ridge_mine S k) - train_err_loss S n l (ridge_mine S k)) 
             =  measure_pmf.expectation (Samples (n+1) D)
                         (\<lambda> S.  measure_pmf.expectation (pmf_of_set {0..<n})
-                     (\<lambda> i. (l (ridge_mine (swapped_S S i) k) (S i)) -  (l  (ridge_mine S k) (S i))))" 
+                     (\<lambda> i. (l (ridge_mine (swapped_S S i n) k) (S i)) -  (l  (ridge_mine S k) (S i))))" 
 proof -
   let ?Dn = "Samples n D"
   let ?Dn1 = "Samples (n+1) D"
   let ?I = "{0..<n}"
   let ?pmfI = "(pmf_of_set ?I)"
-  let ?l_swapped = "(\<lambda> i. (\<lambda> S. l (ridge_mine (swapped_S S i) k) (S i)))"
+  let ?l_swapped = "(\<lambda> i. (\<lambda> S. l (ridge_mine (swapped_S S i n) k) (S i)))"
   let ?l_trunc = "(\<lambda> S. (\<lambda> z. l (ridge_mine (truncated_S S n) k) z))"
   let ?l_Si = "(\<lambda> S. (\<lambda>i. l (ridge_mine S k) (S i)))"
   let ?pred_err = "(\<lambda> S. pred_err_loss D l (ridge_mine S k))"
@@ -651,9 +713,9 @@ proof -
   have " integral\<^sup>L ?pmfI  (\<lambda> i.  integral\<^sup>L ?Dn1 (\<lambda> Sz. ?l_swapped i Sz)) =
    integral\<^sup>L ?Dn1  (\<lambda> Sz. integral\<^sup>L ?pmfI (\<lambda> i. ?l_swapped i Sz) )"
   proof -
-    have "\<forall> S \<in> (set_pmf ?Dn1). \<forall> i \<in> ?I.(ridge_mine (swapped_S S i) k) \<in> H" 
-      using min_of_Dn1_in_H 
-      by (metis  atLeastLessThan_iff pmf_swapped_same set_pmf_iff swapped_S_def trans_less_add1)
+    have "\<forall> S \<in> (set_pmf ?Dn1). \<forall> i \<in> ?I.(ridge_mine (swapped_S S i n) k) \<in> H" 
+      using min_of_Dn1_in_H pmf_swapped_same n_pos 
+      by (smt add_diff_cancel_right' add_gr_0 atLeastLessThan_iff less_add_same_cancel1 less_trans set_pmf_iff swapped_S_def zero_less_one) 
     then have l_swapped_nn: "\<forall> S \<in> (set_pmf ?Dn1). \<forall> i \<in> ?I. ?l_swapped i S \<ge> 0"
       using l_pos  sample_in_D by auto
 
@@ -705,29 +767,199 @@ proof -
 
   also have " \<dots>  =
    integral\<^sup>L ?Dn1 (\<lambda> S.  integral\<^sup>L ?pmfI 
-   (\<lambda> i. (l (ridge_mine (swapped_S S i) k) (S i)))) - 
+   (\<lambda> i. (l (ridge_mine (swapped_S S i n) k) (S i)))) - 
    integral\<^sup>L ?Dn1 (\<lambda> S.  integral\<^sup>L ?pmfI (?l_Si S))" using 2 6 by auto
   also have " \<dots> =   integral\<^sup>L ?Dn1 (\<lambda> S.  
-   integral\<^sup>L ?pmfI (\<lambda> i. (l (ridge_mine (swapped_S S i) k) (S i)) ) -
+   integral\<^sup>L ?pmfI (\<lambda> i. (l (ridge_mine (swapped_S S i n) k) (S i)) ) -
   integral\<^sup>L ?pmfI (?l_Si S)  )" 
     using integrable_Si integrable_swapped_Si  by simp
   also have " \<dots> = 
      integral\<^sup>L ?Dn1 (\<lambda> S.  integral\<^sup>L ?pmfI (\<lambda> i. 
-   (l (ridge_mine (swapped_S S i) k) (S i)) - (?l_Si S i) ) )"
+   (l (ridge_mine (swapped_S S i n) k) (S i)) - (?l_Si S i) ) )"
   proof -
-    have "\<forall> S. sum (\<lambda> i. (l (ridge_mine (swapped_S S i) k) (S i)) ) ?I -  sum (?l_Si S) ?I  =
-    sum (\<lambda> i. (l (ridge_mine (swapped_S S i) k) (S i)) - (?l_Si S i) ) ?I"
+    have "\<forall> S. sum (\<lambda> i. (l (ridge_mine (swapped_S S i n) k) (S i)) ) ?I -  sum (?l_Si S) ?I  =
+    sum (\<lambda> i. (l (ridge_mine (swapped_S S i n) k) (S i)) - (?l_Si S i) ) ?I"
       by (simp add: sum_subtractf)
     then  have "\<forall> S.
-   integral\<^sup>L ?pmfI (\<lambda> i. (l (ridge_mine (swapped_S S i) k) (S i)) )  -
+   integral\<^sup>L ?pmfI (\<lambda> i. (l (ridge_mine (swapped_S S i n) k) (S i)) )  -
  integral\<^sup>L ?pmfI (?l_Si S) =
     integral\<^sup>L ?pmfI (\<lambda> i. 
-   (l (ridge_mine (swapped_S S i) k) (S i)) -  (?l_Si S i) )" using non_empty_I
+   (l (ridge_mine (swapped_S S i n) k) (S i)) -  (?l_Si S i) )" using non_empty_I
       by (metis (no_types, lifting) diff_divide_distrib fin_I integral_pmf_of_set)
     then show ?thesis by auto
   qed
   finally show ?thesis by blast
 qed
+
+lemma ridge_index_swap_same: "\<forall> S. ridge_mine (S_index S i (S n)) k =
+                    ridge_mine (swapped_S S i n) k"
+  using truncated_same_min using S_index_swap_same 
+  by metis
+
+
+lemma add_sample_integrable:
+  fixes f ::"( _  \<Rightarrow> _ \<Rightarrow> real)"
+  fixes m :: "nat"
+  assumes f_nn: "\<forall>S\<in> (Samples m D). \<forall>z\<in>D. f S z \<ge> 0"
+  assumes integrable_D: "\<forall> S \<in> (Samples m D). integrable D (f S)"
+  shows    "integrable (Samples m D) (\<lambda> S. measure_pmf.expectation D (\<lambda> z. f S z)) =
+      integrable (Samples (m+1) D) (\<lambda> Sz. f (truncated_S Sz m) (Sz m))" 
+proof -
+  let ?pair = "(pair_pmf (Samples m D) D)"
+  let ?Dm = "Samples m D"
+  have "finite {0..<m}" by auto
+  have " m \<notin> {0..<m}" by auto
+  have insert_m:"(insert m {0..<m}) = {0..<m+1}" 
+    using atLeast0LessThan by auto
+  have 01:"\<forall> S \<in> ?Dm. integral\<^sup>L D (\<lambda> z. f S z) =  enn2real (integral\<^sup>N D (\<lambda> z. f S z))"
+    using integrable_D f_nn 
+    by (metis (mono_tags, lifting) AE_measure_pmf_iff enn2real_ennreal integral_nonneg_AE nn_integral_cong nn_integral_eq_integral)
+  
+ have 02: "\<forall> S \<in> ?Dm. ennreal (integral\<^sup>L D (\<lambda> z. f S z)) =  (integral\<^sup>N D (\<lambda> z. f S z))"
+    using integrable_D f_nn 
+    by (metis (mono_tags, lifting) AE_measure_pmf_iff  nn_integral_cong nn_integral_eq_integral)
+  then have 03:"integral\<^sup>N (Samples m D) (\<lambda> S. integral\<^sup>N D (\<lambda> z. f S z)) =
+      integral\<^sup>N (Samples m D) (\<lambda> S. integral\<^sup>L D (\<lambda> z. f S z))"
+   using same_nn_integral_restricted1[of ?Dm "(\<lambda> S. ( integral\<^sup>N D (\<lambda> z. f S z)))" 
+                    "(\<lambda> S. integral\<^sup>L D (\<lambda> z. f S z))"]
+   using "02" by auto
+  
+  have 1:" integral\<^sup>L ?Dm (\<lambda> S. integral\<^sup>L D (\<lambda> z. f S z)) =
+  integral\<^sup>L ?pair  (\<lambda> (S,z). f S z)" 
+    using expectation_pair_pmf'[of ?Dm D f]  f_nn integrable_D by linarith
+
+   have 11:" integral\<^sup>N ?Dm (\<lambda> S. integral\<^sup>N D (\<lambda> z. f S z)) =
+  integral\<^sup>N ?pair  (\<lambda> (S,z). f S z)"
+     using nn_integral_pair_pmf'[of ?Dm D "(\<lambda> (S,z). f S z)"]
+     by auto
+
+
+have "integral\<^sup>N (map_pmf (\<lambda>(f,y). f(m:=y)) (pair_pmf (Samples m D) D))
+       (\<lambda> Sz. f (Sz(m:=undefined))  (Sz m)) =
+     integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x. (\<lambda> Sz. f (Sz(m:=undefined))  (Sz m))
+         ( (\<lambda>(f,y). f(m:=y)) x))"
+    using integral_map_pmf by simp
+
+  have "integral\<^sup>N (pair_pmf (Samples m D) D)
+         (\<lambda>x. (\<lambda> Sz. f (Sz(m:=undefined)) (Sz m)) ( (\<lambda>(f,y). f(m:=y)) x)) = 
+      integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x. (\<lambda> Sz. f (Sz(m:=undefined))  (Sz m)) ( (\<lambda> f. (fst f)(m:=(snd f))) x))" 
+    by (simp add: case_prod_beta)
+
+  have " integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x. (\<lambda> Sz. f (Sz(m:=undefined))  (Sz m)) ( (\<lambda> f. (fst f)(m:=(snd f))) x)) =
+     integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x. (\<lambda> Sz. f (Sz(m:=undefined))  (Sz m)) ((fst x)(m:=(snd x))))" by auto
+
+  have " integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x. (\<lambda> Sz. f (Sz(m:=undefined)) (Sz m)) ((fst x)(m:=(snd x)))) =
+     integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x.  f (((fst x)(m:=(snd x)))(m:=undefined))  (((fst x)(m:=(snd x))) m))"
+    by auto
+
+  have " integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x. f (((fst x)(m:=(snd x)))(m:=undefined))  (((fst x)(m:=(snd x))) m)) = 
+     integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x. f ((fst x)(m:=undefined)) (((fst x)(m:=(snd x))) m))" by auto
+
+  have " integral\<^sup>N (pair_pmf (Samples m D) D) 
+    (\<lambda>x.  f ((fst x)(m:=undefined))  (((fst x)(m:=(snd x))) m)) =
+      integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x.  f ((fst x)(m:=undefined)) (snd x))" by auto
+
+  then have "integral\<^sup>L (map_pmf (\<lambda>(f,y). f(m:=y)) (pair_pmf (Samples m D) D))
+       (\<lambda> Sz. f (Sz(m:=undefined)) (Sz m)) = 
+   integral\<^sup>L (pair_pmf (Samples m D) D) (\<lambda>x.  f ((fst x)(m:=undefined))  (snd x))"
+    by simp
+
+
+
+  have 2: "\<forall>x\<in> ?pair. ((fst x)(m:=undefined)) = (fst x)"
+  proof 
+    fix x
+    assume "x\<in>?pair"
+    have "pmf (Samples m D) (fst x) > 0" using \<open>x \<in> ?pair\<close>
+      using pmf_positive by fastforce
+    then have "\<forall>y. y \<notin> {0..<m} \<longrightarrow> (fst x) y = undefined"
+      unfolding Samples_def using pmf_Pi_outside
+      by (metis finite_atLeastLessThan less_numeral_extra(3))
+    then show "((fst x)(m:=undefined)) = (fst x)" by auto
+  qed
+
+   then have "(\<lambda>x \<in> (pair_pmf (Samples m D) D).  f ((fst x)(m:=undefined))  (snd x)) =
+    (\<lambda>x \<in> (pair_pmf (Samples m D) D).  f (fst x) (snd x))" by auto
+
+  have " integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x.  f ((fst x)(m:=undefined))  (snd x)) =
+     integral\<^sup>N (pair_pmf (Samples m D) D)
+     (\<lambda>x \<in>(pair_pmf (Samples m D) D).  f ((fst x)(m:=undefined))  (snd x))"
+
+    by (metis nn_integral_restrict_space_eq_restrict_fun) 
+
+  have "integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x \<in> (pair_pmf (Samples m D) D).  f (fst x) (snd x)) =
+      integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x.  f (fst x) (snd x))"  
+  using nn_integral_restrict_space_eq_restrict_fun by metis
+  then have " integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x.  f ((fst x)(m:=undefined))  (snd x)) =
+     integral\<^sup>N (pair_pmf (Samples m D) D) (\<lambda>x.  f (fst x) (snd x))" 
+    using \<open>(\<lambda>x\<in>set_pmf (pair_pmf (Samples m D) D). f ((fst x)(m := undefined)) (snd x)) = (\<lambda>x\<in>set_pmf (pair_pmf (Samples m D) D). f (fst x) (snd x))\<close> \<open>\<integral>\<^sup>+ x. ennreal (f ((fst x)(m := undefined)) (snd x)) \<partial>measure_pmf (pair_pmf (Samples m D) D) = \<integral>\<^sup>+ x. ennreal ((\<lambda>x\<in>set_pmf (pair_pmf (Samples m D) D). f ((fst x)(m := undefined)) (snd x)) x) \<partial>measure_pmf (pair_pmf (Samples m D) D)\<close> by auto
+  
+  have "   integral\<^sup>N ?pair  (\<lambda> (S,z). f S z) =
+      integral\<^sup>N ( ( map_pmf (\<lambda>(x, y). (y, x)) (pair_pmf D (Samples m D))))
+         (\<lambda> (S,z). f S z) " 
+    by (metis pair_commute_pmf)
+
+
+  have "(map_pmf (\<lambda>(f,y). f(m:=y)) ( map_pmf (\<lambda>(x, y). (y, x)) (pair_pmf D (Samples m D)))) =
+    (map_pmf (\<lambda>(y,f). f(m:=y)) ((pair_pmf D (Samples m D))))" using map_pmf_comp
+    by (smt Pair_inject map_pmf_cong prod.collapse split_beta)
+
+  also have "\<dots> = Samples (m+1) D" unfolding Samples_def
+    using  `finite {0..<m}` `m \<notin> {0..<m}`  Pi_pmf_insert[of "{0..<m}" m undefined "(\<lambda>_. D)"]
+      insert_m by auto
+
+   finally have " integral\<^sup>N ?pair  (\<lambda> (S,z). f S z) =
+       integral\<^sup>N (Samples (m+1) D) (\<lambda> Sz. f (Sz(m:=undefined))  (Sz m))"
+    using `finite {0..<m}` `m \<notin> {0..<m}` same_integral_restricted
+     2 11 fun_upd_same fun_upd_upd nn_integral_map_pmf pair_commute_pmf prod.case_eq_if
+    by (smt \<open>\<integral>\<^sup>+ x. ennreal (f ((fst x)(m := undefined)) (snd x)) \<partial>measure_pmf (pair_pmf (Samples m D) D) = \<integral>\<^sup>+ x. ennreal (f (fst x) (snd x)) \<partial>measure_pmf (pair_pmf (Samples m D) D)\<close> nn_integral_cong)
+
+  then have "integral\<^sup>N (Samples m D) (\<lambda> S. integral\<^sup>N D (\<lambda> z. f S z)) =
+      integral\<^sup>N (Samples (m+1) D) (\<lambda> Sz. f (truncated_S Sz m) (Sz m))" unfolding truncated_S_def 
+    using 11  by simp
+  then have "integral\<^sup>N (Samples m D) (\<lambda> S. integral\<^sup>L D (\<lambda> z. f S z)) =
+      integral\<^sup>N (Samples (m+1) D) (\<lambda> Sz. f (truncated_S Sz m) (Sz m))" using 03
+    by simp
+  have "\<forall>S \<in> ?Dm. (integral\<^sup>N D (\<lambda> z. f S z)) = ennreal( norm ( integral\<^sup>L D (\<lambda> z. f S z)))"
+    using "01" "02" by auto
+  then have "integral\<^sup>N (Samples m D) (\<lambda> S. integral\<^sup>L D (\<lambda> z. f S z)) =
+      integral\<^sup>N (Samples m D) (\<lambda> S. ennreal( norm ( integral\<^sup>L D (\<lambda> z. f S z))))"
+    using "03" same_nn_integral_restricted1 by force
+
+  have "\<forall>S \<in> (Samples (m+1) D). f (truncated_S S m) (S m) =
+             (norm (f (truncated_S S m) (S m)))" using truncated_S_in_Dn[of m]
+    by (simp add: f_nn sample_in_D)
+  then have "integral\<^sup>N (Samples (m+1) D) (\<lambda> Sz. f (truncated_S Sz m) (Sz m)) =
+      integral\<^sup>N (Samples (m+1) D) (\<lambda> Sz. (norm (f (truncated_S Sz m) (Sz m))))" 
+using same_nn_integral_restricted1 
+  by (metis (no_types, lifting))
+  then have 10: " integral\<^sup>N (Samples m D) (\<lambda> S. ennreal( norm ( integral\<^sup>L D (\<lambda> z. f S z)))) =
+       integral\<^sup>N (Samples (m+1) D) (\<lambda> Sz. (norm (f (truncated_S Sz m) (Sz m))))" 
+    using \<open>\<integral>\<^sup>+ x. ennreal (measure_pmf.expectation D (f x)) \<partial>measure_pmf (Samples m D) = \<integral>\<^sup>+ S. ennreal (norm (measure_pmf.expectation D (f S))) \<partial>measure_pmf (Samples m D)\<close> \<open>\<integral>\<^sup>+ x. ennreal (measure_pmf.expectation D (f x)) \<partial>measure_pmf (Samples m D) = \<integral>\<^sup>+ x. ennreal (f (truncated_S x m) (x m)) \<partial>measure_pmf (Samples (m + 1) D)\<close> by auto
+
+  have 11: "(\<lambda> S. measure_pmf.expectation D (\<lambda> z. f S z)) \<in> borel_measurable ?Dm" by auto
+  have 12: "(\<lambda> Sz. f (truncated_S Sz m) (Sz m)) \<in> borel_measurable (Samples (m+1) D)" by auto
+
+
+
+
+
+
+
+
+
+  then show ?thesis using truncated_S_def using 10 11 12
+   integrable_iff_bounded
+    by (metis (mono_tags, lifting) nn_integral_cong)
+qed
+
 
 end
 end

@@ -21,6 +21,8 @@ proof -
   then show "train_err_loss S n l h \<ge> 0" unfolding train_err_loss_def  by simp
 qed
 
+
+
 text\<open>Show L_s(w) is convex over H, when the loss function is convex over H\<close>
 lemma train_err_loss_if_convex: "(\<forall>i \<in>{0..<n} . convex_on H (\<lambda> h. l h (S i))) \<Longrightarrow>
    convex_on H (train_err_loss S n l)"
@@ -56,9 +58,7 @@ qed
 text\<open>Define a locale for cleaner proofs and definitions\<close>
 locale learning_basics1 =
 
-fixes H :: "'a::euclidean_space set"
-  and X :: "'b set"
-  and Y :: "'c set"
+fixes H :: "'a::{euclidean_space} set"
   and D :: "('b \<times> 'c) pmf"
   and n :: "nat"
   and l :: "('a  \<Rightarrow> ('b \<times> 'c) \<Rightarrow> real)"
@@ -67,7 +67,6 @@ assumes nnH: "H \<noteq> {}"
   and  convH: "convex H"
   and l_pos: "\<forall>h\<in>H. \<forall>z\<in>D. l h z \<ge> 0"
   and convll : "\<forall>z \<in> D. convex_on H (\<lambda> h. l h z)"
-  and "set_pmf D \<subseteq> (X\<times>Y)"
   and n_pos: "n\<ge>1"
  and k_pos : "k>0"
 begin
@@ -94,11 +93,15 @@ definition ridge_argmin :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> real \<R
 definition ridge_mine :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> real \<Rightarrow> 'a::euclidean_space" where
   "ridge_mine S' k' = (SOME h. h \<in> ridge_argmin S' k')"
 
-definition swapped_S :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> nat \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
-  "swapped_S S' i =  S'(i:= S' n, n:= S' i) "  
+definition swapped_S :: "(nat \<Rightarrow> ('b * 'c)) \<Rightarrow> nat \<Rightarrow> nat  \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
+  "swapped_S S' i m =  S'(i:= S' m, m:= S' i) "  
 
 definition truncated_S :: "(nat \<Rightarrow> ('b * 'c))  \<Rightarrow> nat \<Rightarrow>(nat \<Rightarrow> ('b * 'c))" where
   "truncated_S S' m =  S'(m := undefined) "
+
+text\<open>S_index is a set where the i-th data point in S is replaced with an arbitrary one\<close>
+definition S_index :: "(nat \<Rightarrow> ('b \<times> 'c)) \<Rightarrow> nat \<Rightarrow> ('b \<times> 'c) \<Rightarrow> (nat \<Rightarrow> ('b * 'c))" where
+  "S_index S' i z = S'(i := z)"
 
 lemma set_pmf_Pi_pmf: "\<And>S i. finite A \<Longrightarrow> S \<in> set_pmf (Pi_pmf A dflt Q)
                    \<Longrightarrow> i \<in> A \<Longrightarrow> S i \<in> set_pmf (Q i)" 
@@ -161,6 +164,21 @@ proof
     then show  "(ridge_mine S k) \<in> (ridge_argmin S k)"
       unfolding ridge_mine_def using some_in_eq by blast
   qed
+qed
+
+
+lemma S_index_swap_same: "truncated_S (S_index S i (S n)) n =
+                    truncated_S (swapped_S S i n) n"
+  unfolding truncated_S_def unfolding S_index_def unfolding swapped_S_def
+  by auto
+
+lemma pred_err_loss_nn:
+  assumes "h\<in>H"
+  shows "pred_err_loss D l h \<ge> 0" unfolding pred_err_loss_def
+proof - 
+  have "\<forall>z\<in>D. l h z \<ge> 0" using l_pos `h\<in>H` by auto
+  then show "integral\<^sup>L D (\<lambda> z. l h z) \<ge> 0"
+    by (simp add: AE_measure_pmf_iff integral_nonneg_AE)
 qed
 
 end
